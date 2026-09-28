@@ -1,5 +1,5 @@
 use crate::events::{EventKind, EventSource, MarketEvent, now_unix_ms};
-use crate::flow::FlowAggregator;
+use crate::flow::FlowBook;
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -74,7 +74,7 @@ pub async fn observe_new_tokens(url: &str) -> Result<(), PumpPortalError> {
                                     }
                                     if matches!(event.kind, EventKind::Trade) {
                                         flow.record(&event);
-                                        let snapshot = flow.snapshot();
+                                        let snapshot = event.mint.as_deref().map(|m| flow.snapshot(m)).unwrap_or_default();
                                         info!(
                                             mint = ?event.mint,
                                             buy_sol = snapshot.buy_sol,
