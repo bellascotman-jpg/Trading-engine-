@@ -3,7 +3,6 @@ use crate::events::{Decision, RiskDecision, SecuritySnapshot};
 use crate::flow::FlowSnapshot;
 
 pub struct RiskEngine { pub config: RiskConfig }
-
 impl RiskEngine {
     pub fn evaluate(&self, security: &SecuritySnapshot, buy_sol: f64, sell_sol: f64) -> RiskDecision {
         let mut reasons = Vec::new();
@@ -16,7 +15,6 @@ impl RiskEngine {
         let decision = if reasons.is_empty() { Decision::Pass } else { Decision::Reject };
         RiskDecision { decision, reasons, score: None }
     }
-
     pub fn evaluate_flow(&self, flow: &FlowSnapshot) -> RiskDecision {
         let mut reasons = Vec::new();
         if flow.buy_count + flow.sell_count == 0 { reasons.push("no one-minute trade flow observed".to_string()); }
