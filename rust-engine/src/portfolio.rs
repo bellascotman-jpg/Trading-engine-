@@ -2,21 +2,20 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PositionState { Candidate, Approved, EntryPending, Open, PartialExit, Closed, Rejected }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaperPosition { pub id: String, pub mint: String, pub state: PositionState, pub entry_sol: f64, pub quantity: f64, pub entry_price: f64, pub peak_price: f64, pub realized_pnl_sol: f64 }
-
 #[derive(Debug, Default)]
 pub struct PaperPortfolio { pub positions: Vec<PaperPosition>, pub daily_pnl_sol: f64 }
-
 impl PaperPortfolio {
     pub fn open(&mut self, mint: String, sol: f64, qty: f64, price: f64, max: usize) -> Result<String, String> {
+        if !sol.is_finite() || !qty.is_finite() || !price.is_finite() || sol <= 0.0 || qty <= 0.0 || price <= 0.0 { return Err("invalid paper order parameters".into()); }
         if self.positions.iter().filter(|p| matches!(p.state, PositionState::Open | PositionState::PartialExit)).count() >= max { return Err("position limit reached".into()); }
         let id = format!("paper-{}", self.positions.len() + 1);
         self.positions.push(PaperPosition { id: id.clone(), mint, state: PositionState::Open, entry_sol: sol, quantity: qty, entry_price: price, peak_price: price, realized_pnl_sol: 0.0 });
         Ok(id)
     }
     pub fn mark(&mut self, id: &str, price: f64, stop: f64, tp: f64, trail: f64) -> Option<PositionState> {
+        if !price.is_finite() || price <= 0.0 { return None; }
         let p = self.positions.iter_mut().find(|p| p.id == id)?;
         p.peak_price = p.peak_price.max(price);
         let roi = (price / p.entry_price - 1.0) * 100.0;
