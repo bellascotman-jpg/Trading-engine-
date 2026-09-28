@@ -1,5 +1,33 @@
-use crate::events::{MarketEvent,now_unix_ms};use std::collections::{HashMap,HashSet,VecDeque};
-#[derive(Debug,Clone,Default,serde::Serialize)]pub struct FlowSnapshot{pub buy_sol:f64,pub sell_sol:f64,pub buy_count:u64,pub sell_count:u64,pub unique_buyers:usize,pub unique_sellers:usize}
-#[derive(Debug)]struct E{ts:u64,sol:f64,buy:bool,trader:Option<String>}
-#[derive(Debug,Default)]pub struct FlowBook{m:HashMap<String,VecDeque<E>>}
-impl FlowBook{pub fn record(&mut self,e:&MarketEvent){let(Some(mint),Some(sol),Some(buy))=(e.mint.clone(),e.sol_amount,e.is_buy)else{return};if !sol.is_finite()||sol<0.0{return};let q=self.m.entry(mint).or_default();q.push_back(E{ts:e.observed_at_unix_ms,sol,buy,trader:e.trader.clone()});Self::prune(q,e.observed_at_unix_ms)}pub fn snapshot(&mut self,mint:&str)->FlowSnapshot{let n=now_unix_ms();let q=self.m.entry(mint.to_string()).or_default();Self::prune(q,n);let mut s=FlowSnapshot::default();let(mut b,mut se)=(HashSet::new(),HashSet::new());for e in q{if e.buy{s.buy_sol+=e.sol;s.buy_count+=1;if let Some(t)=&e.trader{b.insert(t);}}else{s.sell_sol+=e.sol;s.sell_count+=1;if let Some(t)=&e.trader{se.insert(t);}}}s.unique_buyers=b.len();s.unique_sellers=se.len();s}fn prune(q:&mut VecDeque<E>,n:u64){let c=n.saturating_sub(60_000);while q.front().is_some_and(|e|e.ts<c){q.pop_front();}}}
+use crate::events::{now_unix_ms, MarketEvent};
+use std::collections::{HashMap, HashSet, VecDeque};
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct FlowSnapshot { pub buy_sol: f64, pub sell_sol: f64, pub buy_count: u64, pub sell_count: u64, pub unique_buyers: usize, pub unique_sellers: usize }
+#[derive(Debug)] struct E { ts: u64, sol: f64, buy: bool, trader: Option<String> }
+#[derive(Debug, Default)] pub struct FlowBook { m: HashMap<String, VecDeque<E>> }
+
+impl FlowBook {
+    pub fn record(&mut self, e: &MarketEvent) {
+        let (Some(mint), Some(sol), Some(buy)) = (e.mint.clone(), e.sol_amount, e.is_buy) else { return; };
+        if !sol.is_finite() || sol < 0.0 { return; }
+        let q = self.m.entry(mint).or_default();
+        q.push_back(E { ts: e.observed_at_unix_ms, sol, buy, trader: e.trader.clone() });
+        Self::prune(q, e.observed_at_unix_ms);
+    }
+    pub fn snapshot(&mut self, mint: &str) -> FlowSnapshot {
+        let n = now_unix_ms();
+        let q = self.m.entry(mint.to_string()).or_default();
+        Self::prune(q, n);
+        let mut s = FlowSnapshot::default();
+        let (mut buyers, mut sellers) = (HashSet::new(), HashSet::new());
+        for e in q.iter() {
+            if e.buy { s.buy_sol += e.sol; s.buy_count += 1; if let Some(t) = &e.trader { buyers.insert(t); } }
+            else { s.sell_sol += e.sol; s.sell_count += 1; if let Some(t) = &e.trader { sellers.insert(t); } }
+        }
+        s.unique_buyers = buyers.len(); s.unique_sellers = sellers.len(); s
+    }
+    fn prune(q: &mut VecDeque<E>, n: u64) {
+        let cutoff = n.saturating_sub(60_000);
+        while q.front().is_some_and(|e| e.ts < cutoff) { q.pop_front(); }
+    }
+}
