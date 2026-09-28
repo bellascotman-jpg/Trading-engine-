@@ -7,7 +7,7 @@ pub fn now_unix_ms() -> u64 { SystemTime::now().duration_since(UNIX_EPOCH).unwra
 pub struct MarketEvent {
     pub event_id: String, pub observed_at_unix_ms: u64, pub slot: Option<u64>, pub signature: Option<String>,
     pub mint: Option<String>, pub symbol: Option<String>, pub source: EventSource, pub kind: EventKind,
-    pub sol_amount: Option<f64>, pub token_amount: Option<f64>, pub is_buy: Option<bool>,
+    pub sol_amount: Option<f64>, pub token_amount: Option<f64>, pub is_buy: Option<bool>, pub trader: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EventSource { PumpFun, SolanaRpc, Yellowstone, Raydium, DexScreener, Unknown }
