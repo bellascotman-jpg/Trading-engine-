@@ -1,0 +1,4 @@
+import {NextResponse} from "next/server";
+const base=process.env.SUPABASE_URL; const key=process.env.SUPABASE_SECRET_KEY;
+async function read(path:string){if(!base||!key)return {error:"server_not_configured"};const r=await fetch(base+"/rest/v1/"+path,{headers:{apikey:key,Authorization:"Bearer "+key},cache:"no-store"});if(!r.ok)return {error:"supabase_error",status:r.status};return r.json();}
+export async function GET(){const r=await Promise.all([read("tokens?select=*&order=last_seen_at.desc&limit=50"),read("audit_reports?select=*&order=generated_at.desc&limit=100"),read("scenario_forecasts?select=*&order=generated_at.desc&limit=100"),read("paper_positions?select=*&order=opened_at.desc&limit=50"),read("engine_health?select=*&order=component.asc")]);return NextResponse.json({tokens:r[0],audits:r[1],scenarios:r[2],positions:r[3],health:r[4],serverTime:new Date().toISOString()});}
