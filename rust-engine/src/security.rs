@@ -3,7 +3,7 @@ use crate::rpc::SolanaRpc;
 use serde_json::Value;
 use tracing::warn;
 
-pub async fn inspect_mint(rpc: &SolanaRpc, mint: &str) -> Result<SecuritySnapshot, String> {
+pub async fn inspect_mint(rpc: &SolanaRpc, mint: &str, excluded_owners: &[String]) -> Result<SecuritySnapshot, String> {
     let accounts = rpc.get_multiple_accounts(&[mint.to_string()]).await.map_err(|e| e.to_string())?;
     let account = accounts["value"].get(0).cloned().unwrap_or(Value::Null);
     if account.is_null() { return Err("mint account not found".into()); }
