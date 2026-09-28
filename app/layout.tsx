@@ -1,0 +1,1 @@
+import "./globals.css"; export const metadata={title:"Solana Trading Intelligence Terminal",description:"Live Solana token research and paper-trading terminal."}; export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body>{children}</body></html>}
