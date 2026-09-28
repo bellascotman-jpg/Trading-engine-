@@ -1,5 +1,6 @@
 use crate::config::RiskConfig;
 use crate::events::{Decision, RiskDecision, SecuritySnapshot};
+use crate::flow::FlowSnapshot;
 
 pub struct RiskEngine {
     pub config: RiskConfig,
@@ -51,5 +52,32 @@ impl CircuitBreaker {
         if self.daily_loss_sol >= cfg.max_daily_loss_sol {
             self.halted = true;
         }
+    }
+}
+
+
+impl RiskEngine {
+    pub fn evaluate_flow(&self, flow: &FlowSnapshot) -> RiskDecision {
+        let mut reasons = Vec::new();
+
+        if flow.buy_count + flow.sell_count == 0 {
+            reasons.push("no one-minute trade flow observed".to_string());
+        }
+        if flow.buy_sol <= 0.0 {
+            reasons.push("no buy-side SOL flow observed".to_string());
+        }
+        if flow.sell_sol > 0.0 && flow.buy_sol / flow.sell_sol < 2.0 {
+            reasons.push("buy/sell SOL-flow ratio is below the configured 2:1 gate".to_string());
+        }
+        if flow.unique_buyers < 2 {
+            reasons.push("buyer breadth is too low for the current strategy".to_string());
+        }
+
+        let ratio = if flow.sell_sol > 0.0 { flow.buy_sol / flow.sell_sol } else { f64::INFINITY };
+        let breadth = flow.unique_buyers as f64 / (flow.unique_sellers.max(1) as f64);
+        let score = (ratio.min(5.0) / 5.0 * 60.0 + breadth.min(3.0) / 3.0 * 40.0).clamp(0.0, 100.0);
+
+        let decision = if reasons.is_empty() { Decision::Pass } else { Decision::Watch };
+        RiskDecision { decision, reasons, score: Some(score) }
     }
 }
