@@ -57,14 +57,21 @@ pub async fn observe_new_tokens(url: &str) -> Result<(), PumpPortalError> {
                 let (mut write, mut read) = stream.split();
 
                 write.send(Message::Text(json!({"method":"subscribeNewToken"}).to_string().into())).await?;
-                write.send(Message::Text(json!({"method":"subscribeTokenTrade","keys":[]}).to_string().into())).await?;
-                info!("PumpPortal token subscriptions established");
+                info!("PumpPortal new-token subscription established");
 
                 while let Some(message) = read.next().await {
                     match message? {
                         Message::Text(text) => {
                             if let Ok(value) = serde_json::from_str::<Value>(&text) {
                                 if let Some(event) = parse_event(&value) {
+                                    if matches!(event.kind, EventKind::TokenCreated) {
+                                        if let Some(mint) = &event.mint {
+                                            let sub = json!({"method":"subscribeTokenTrade","keys":[mint]}).to_string();
+                                            if let Err(e) = write.send(Message::Text(sub.into())).await {
+                                                warn!(%e, mint, "failed to subscribe to token trades");
+                                            }
+                                        }
+                                    }
                                     if matches!(event.kind, EventKind::Trade) {
                                         flow.record(&event);
                                         let snapshot = flow.snapshot();
