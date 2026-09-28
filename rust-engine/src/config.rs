@@ -58,6 +58,8 @@ pub struct AppConfig {
     pub rpc_url: String,
     pub websocket_url: String,
     pub pumpportal_url: String,
+    pub supabase_url: Option<String>,
+    pub supabase_secret_key: Option<String>,
     pub risk: RiskConfig,
 }
 
@@ -73,6 +75,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "wss://api.mainnet.solana.com".to_string()),
             pumpportal_url: env::var("PUMPPORTAL_WS_URL")
                 .unwrap_or_else(|_| "wss://pumpportal.fun/api/data".to_string()),
+            supabase_url: env::var("SUPABASE_URL").ok(),
+            supabase_secret_key: env::var("SUPABASE_SECRET_KEY").ok(),
             risk: RiskConfig::default(),
         }
     }
