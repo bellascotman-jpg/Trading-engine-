@@ -1,3 +1,23 @@
-use serde::{Deserialize,Serialize};
-#[derive(Debug,Clone,Default,Serialize,Deserialize)]pub struct PoolSnapshot{pub mint:String,pub dex:String,pub pool_address:Option<String>,pub base_reserve:Option<f64>,pub quote_reserve_sol:Option<f64>,pub price_sol:Option<f64>,pub liquidity_sol:Option<f64>,pub observed_at_ms:u64,pub evidence:Vec<String>}
-#[derive(Debug,Clone,Default,Serialize,Deserialize)]pub struct MarketMetrics{pub price_sol:Option<f64>,pub liquidity_sol:Option<f64>,pub volume_60s_sol:Option<f64>,pub market_cap_sol:Option<f64>,pub token_age_seconds:Option<u64>}
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct PoolSnapshot {
+    pub mint: String,
+    pub dex: String,
+    pub pool_address: Option<String>,
+    pub base_reserve: Option<f64>,
+    pub quote_reserve_sol: Option<f64>,
+    pub price_sol: Option<f64>,
+    pub liquidity_sol: Option<f64>,
+    pub observed_at_ms: u64,
+    pub evidence: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MarketMetrics {
+    pub price_sol: Option<f64>,
+    pub liquidity_sol: Option<f64>,
+    pub volume_60s_sol: Option<f64>,
+    pub market_cap_sol: Option<f64>,
+    pub token_age_seconds: Option<u64>,
+}
