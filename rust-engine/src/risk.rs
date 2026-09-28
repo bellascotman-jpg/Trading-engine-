@@ -16,16 +16,7 @@ impl RiskEngine {
         let decision = if reasons.is_empty() { Decision::Pass } else { Decision::Reject };
         RiskDecision { decision, reasons, score: None }
     }
-}
 
-#[derive(Debug, Default)]
-pub struct CircuitBreaker { pub halted: bool, pub daily_loss_sol: f64, pub open_positions: usize }
-impl CircuitBreaker {
-    pub fn can_open(&self, cfg: &RiskConfig) -> bool { !self.halted && self.daily_loss_sol < cfg.max_daily_loss_sol && self.open_positions < cfg.max_open_positions }
-    pub fn record_loss(&mut self, loss_sol: f64, cfg: &RiskConfig) { self.daily_loss_sol += loss_sol.max(0.0); if self.daily_loss_sol >= cfg.max_daily_loss_sol { self.halted = true; } }
-}
-
-impl RiskEngine {
     pub fn evaluate_flow(&self, flow: &FlowSnapshot) -> RiskDecision {
         let mut reasons = Vec::new();
         if flow.buy_count + flow.sell_count == 0 { reasons.push("no one-minute trade flow observed".to_string()); }
@@ -38,4 +29,11 @@ impl RiskEngine {
         let decision = if reasons.is_empty() { Decision::Pass } else { Decision::Watch };
         RiskDecision { decision, reasons, score: Some(score) }
     }
+}
+
+#[derive(Debug, Default)]
+pub struct CircuitBreaker { pub halted: bool, pub daily_loss_sol: f64, pub open_positions: usize }
+impl CircuitBreaker {
+    pub fn can_open(&self, cfg: &RiskConfig) -> bool { !self.halted && self.daily_loss_sol < cfg.max_daily_loss_sol && self.open_positions < cfg.max_open_positions }
+    pub fn record_loss(&mut self, loss_sol: f64, cfg: &RiskConfig) { self.daily_loss_sol += loss_sol.max(0.0); if self.daily_loss_sol >= cfg.max_daily_loss_sol { self.halted = true; } }
 }
