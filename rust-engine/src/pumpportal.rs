@@ -1,5 +1,5 @@
 use crate::events::{EventKind, EventSource, MarketEvent, now_unix_ms};
-use crate::flow::FlowBook;
+use crate::{flow::FlowBook,persistence::SupabaseStore,rpc::SolanaRpc,security};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use thiserror::Error;
@@ -47,8 +47,8 @@ fn parse_event(value: &Value) -> Option<MarketEvent> {
     })
 }
 
-pub async fn observe_new_tokens(url: &str) -> Result<(), PumpPortalError> {
-    let mut flow = FlowAggregator::default();
+pub async fn observe_new_tokens(url: &str, rpc: SolanaRpc, store: Option<SupabaseStore>) -> Result<(), PumpPortalError> {
+    let mut flow = FlowBook::default();
 
     loop {
         match connect_async(url).await {
@@ -66,6 +66,7 @@ pub async fn observe_new_tokens(url: &str) -> Result<(), PumpPortalError> {
                                 if let Some(event) = parse_event(&value) {
                                     if matches!(event.kind, EventKind::TokenCreated) {
                                         if let Some(mint) = &event.mint {
+                                            if let Some(db) = &store { let _ = db.token(mint,event.symbol.as_deref(),event.observed_at_unix_ms).await; if let Ok(s) = security::inspect_mint(&rpc,mint).await { let _ = db.security(&s).await; } }
                                             let sub = json!({"method":"subscribeTokenTrade","keys":[mint]}).to_string();
                                             if let Err(e) = write.send(Message::Text(sub.into())).await {
                                                 warn!(%e, mint, "failed to subscribe to token trades");
@@ -74,6 +75,7 @@ pub async fn observe_new_tokens(url: &str) -> Result<(), PumpPortalError> {
                                     }
                                     if matches!(event.kind, EventKind::Trade) {
                                         flow.record(&event);
+                                        if let Some(db) = &store { let _ = db.trade(&event).await; }
                                         let snapshot = event.mint.as_deref().map(|m| flow.snapshot(m)).unwrap_or_default();
                                         info!(
                                             mint = ?event.mint,
