@@ -1,4 +1,4 @@
-mod config; mod events; mod pumpportal; mod rpc; mod risk; mod security;
+mod config; mod events; mod flow; mod pumpportal; mod rpc; mod risk; mod security;
 use config::AppConfig; use rpc::SolanaRpc; use std::time::Duration; use tokio::time::interval; use tracing::{error,info,warn};
 
 #[tokio::main]
