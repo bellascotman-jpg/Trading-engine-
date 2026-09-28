@@ -10,7 +10,11 @@ pub enum OperatingMode {
 
 impl OperatingMode {
     pub fn from_env() -> Self {
-        match env::var("TRADING_MODE").unwrap_or_else(|_| "observe".to_string()).to_lowercase().as_str() {
+        match env::var("TRADING_MODE")
+            .unwrap_or_else(|_| "observe".to_string())
+            .to_lowercase()
+            .as_str()
+        {
             "paper" => Self::Paper,
             "simulation" | "simulate" => Self::Simulation,
             "live" => Self::Live,
@@ -53,6 +57,7 @@ pub struct AppConfig {
     pub mode: OperatingMode,
     pub rpc_url: String,
     pub websocket_url: String,
+    pub pumpportal_url: String,
     pub risk: RiskConfig,
 }
 
@@ -61,9 +66,13 @@ impl AppConfig {
         Self {
             mode: OperatingMode::from_env(),
             rpc_url: env::var("SOLANA_RPC_URL")
+                .or_else(|_| env::var("HELIUS_RPC_URL"))
                 .unwrap_or_else(|_| "https://api.mainnet.solana.com".to_string()),
             websocket_url: env::var("SOLANA_WS_URL")
+                .or_else(|_| env::var("HELIUS_WS_URL"))
                 .unwrap_or_else(|_| "wss://api.mainnet.solana.com".to_string()),
+            pumpportal_url: env::var("PUMPPORTAL_WS_URL")
+                .unwrap_or_else(|_| "wss://pumpportal.fun/api/data".to_string()),
             risk: RiskConfig::default(),
         }
     }
