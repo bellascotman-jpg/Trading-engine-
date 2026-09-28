@@ -1,0 +1,1 @@
+#[cfg(test)]mod tests{use crate::execution::{compute_limit,priority_fee_lamports};#[test]fn compute_limit_has_cap(){assert_eq!(compute_limit(1_400_000),1_400_000)}#[test]fn priority_fee_math(){assert_eq!(priority_fee_lamports(250_000,50_000),12_500)}}
