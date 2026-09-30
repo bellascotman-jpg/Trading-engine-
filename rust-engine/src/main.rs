@@ -1,74 +1,19 @@
-mod config;
-mod engine;
-mod events;
-mod execution;
-mod flow;
-mod market;
-mod persistence;
-mod portfolio;
-mod pumpportal;
-mod raydium;
-mod rpc;
-mod risk;
-mod security;
-mod strategy;
-
-use config::AppConfig;
-use rpc::SolanaRpc;
-use std::time::Duration;
-use tokio::time::interval;
-use tracing::{error, info, warn};
-
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_| "info,solana_trading_engine=debug".into()))
-        .init();
-    let config = AppConfig::from_env();
-    info!(mode = ?config.mode, "Solana trading engine starting");
-    if config.mode.allows_broadcast() {
-        warn!("live mode configured; execution adapter remains hard-locked until verification");
-    } else {
-        info!("live broadcast locked; observe/paper path active");
-    }
-
-    let rpc = SolanaRpc::new(config.rpc_url.clone());
-    let store = persistence::SupabaseStore::from_env();
-    match rpc.get_slot().await {
-        Ok(slot) => {
-            info!(slot, "RPC healthy");
-            if let Some(db) = &store { let _ = db.health("rpc", "healthy", None).await; }
-        }
-        Err(e) => {
-            error!(%e, "RPC health check failed");
-            if let Some(db) = &store { let _ = db.health("rpc", "degraded", None).await; }
-        }
-    }
-    match rpc.get_latest_blockhash().await {
-        Ok(h) => info!(blockhash = %h.blockhash, last_valid_block_height = h.last_valid_block_height, "blockhash check passed"),
-        Err(e) => error!(%e, "blockhash check failed"),
-    }
-
-    let url = config.pumpportal_url.clone();
-    let observer_rpc = rpc.clone();
-    let observer_store = store.clone();
-    tokio::spawn(async move {
-        if let Err(e) = pumpportal::observe_new_tokens(&url, observer_rpc, observer_store).await {
-            error!(%e, "market observer stopped");
-        }
-    });
-
-    let mut tick = interval(Duration::from_secs(15));
-    loop {
-        tokio::select! {
-            _ = tick.tick() => match rpc.get_slot().await {
-                Ok(slot) => {
-                    info!(slot, mode = ?config.mode, "engine heartbeat");
-                    if let Some(db) = &store { let _ = db.health("rust-engine", "healthy", None).await; }
-                }
-                Err(e) => error!(%e, "RPC heartbeat failed"),
-            },
-            _ = tokio::signal::ctrl_c() => { info!("shutdown"); break; }
-        }
-    }
+mod analysis; mod config; mod dexscreener; mod engine; mod events; mod execution; mod flow; mod jito; mod market; mod persistence; mod portfolio; mod pumpportal; mod raydium; mod rpc; mod risk; mod security; mod strategy;
+use config::AppConfig; use dexscreener::DexScreener; use rpc::SolanaRpc; use std::{collections::HashMap,time::Duration}; use tokio::time::interval; use tracing::{error,info,warn};
+#[tokio::main] async fn main(){
+ tracing_subscriber::fmt().with_env_filter(std::env::var("RUST_LOG").unwrap_or_else(|_|"info,solana_trading_engine=debug".into())).init();
+ let config=AppConfig::from_env(); info!(mode=?config.mode,"Solana intelligence engine starting"); if config.mode.allows_broadcast(){warn!("live mode selected; no signing key or live order adapter is enabled by default");}
+ let rpc=SolanaRpc::new(config.rpc_url.clone()); let store=persistence::SupabaseStore::from_env(); let dex=DexScreener::new();
+ match rpc.get_slot().await{Ok(slot)=>{info!(slot,"RPC healthy");if let Some(db)=&store{let _=db.health("rpc","healthy",None).await;}},Err(e)=>{error!(%e,"RPC health check failed");if let Some(db)=&store{let _=db.health("rpc","degraded",None).await;}}}
+ match rpc.get_latest_blockhash().await{Ok(h)=>info!(blockhash=%h.blockhash,last_valid_block_height=h.last_valid_block_height,"blockhash check passed"),Err(e)=>error!(%e,"blockhash check failed")}
+ let url=config.pumpportal_url.clone(); let observer_rpc=rpc.clone(); let observer_store=store.clone(); let observer_dex=dex.clone();
+ tokio::spawn(async move{if let Err(e)=observe_pipeline(&url,observer_rpc,observer_store,observer_dex).await{error!(%e,"market observer stopped");}});
+ let mut tick=interval(Duration::from_secs(15)); loop{tokio::select!{_ = tick.tick()=>match rpc.get_slot().await{Ok(slot)=>{info!(slot,mode=?config.mode,"engine heartbeat");if let Some(db)=&store{let _=db.health("rust-engine","healthy",None).await;}},Err(e)=>error!(%e,"RPC heartbeat failed")},_ = tokio::signal::ctrl_c()=>{info!("shutdown");break;}}}
+}
+async fn observe_pipeline(url:&str,rpc:SolanaRpc,store:Option<persistence::SupabaseStore>,dex:DexScreener)->Result<(),pumpportal::PumpPortalError>{
+ use futures_util::{SinkExt,StreamExt}; use serde_json::{json,Value}; use tokio_tungstenite::{connect_async,tungstenite::Message}; use std::collections::HashMap; use tokio::time::{sleep,Duration};
+ let mut flow=flow::FlowBook::default(); let mut security_cache:HashMap<String,events::SecuritySnapshot>=HashMap::new(); let mut trade_counts:HashMap<String,u64>=HashMap::new();
+ loop{match connect_async(url).await{Ok((stream,_))=>{info!("PumpPortal connected");let(mut write,mut read)=stream.split();write.send(Message::Text(json!({"method":"subscribeNewToken"}).to_string().into())).await?;
+ while let Some(message)=read.next().await{match message?{Message::Text(text)=>{if let Ok(value)=serde_json::from_str::<Value>(&text){if let Some(event)=pumpportal::parse_event_public(&value){match event.kind{events::EventKind::TokenCreated=>{if let Some(mint)=&event.mint{if let Some(db)=&store{let _=db.token(mint,event.symbol.as_deref(),event.observed_at_unix_ms).await;}if let Ok(sec)=security::inspect_mint(&rpc,mint).await{security_cache.insert(mint.clone(),sec.clone());if let Some(db)=&store{let _=db.security(&sec).await;}}let _=write.send(Message::Text(json!({"method":"subscribeTokenTrade","keys":[mint]}).to_string().into())).await;if let Ok(market)=dex.token(mint).await{if let Some(db)=&store{let _=db.market(mint,&market).await;}let sec=security_cache.get(mint).cloned().unwrap_or(events::SecuritySnapshot{mint:mint.clone(),mint_authority_revoked:None,freeze_authority_revoked:None,top_10_non_bonding_pct:None,liquidity_usd:market.liquidity_usd,checked_at_unix_ms:events::now_unix_ms()});let audit=analysis::audit(&sec,Some(&market),&flow.snapshot(mint));if let Some(db)=&store{let _=db.audit(mint,&audit).await;let _=db.strategy(mint,&audit.verdict,audit.audit_score,0.0,0.0,0,0,json!({"evidence":audit.evidence,"reasons":audit.reasons})).await;let scenarios=analysis::scenarios(&audit,Some(&market),&flow.snapshot(mint));let _=db.scenarios(mint,&scenarios).await;}}info!(mint,symbol=?event.symbol,"token audited");}}}
+events::EventKind::Trade=>{flow.record(&event);if let Some(db)=&store{let _=db.trade(&event).await;}if let Some(mint)=event.mint.as_deref(){let count=trade_counts.entry(mint.to_owned()).or_insert(0);*count+=1;if *count%10==0{let snapshot=flow.snapshot(mint);if let Ok(market)=dex.token(mint).await{if let Some(db)=&store{let _=db.market(mint,&market).await;}if let Some(sec)=security_cache.get(mint){let audit=analysis::audit(sec,Some(&market),&snapshot);let scenarios=analysis::scenarios(&audit,Some(&market),&snapshot);if let Some(db)=&store{let _=db.audit(mint,&audit).await;let _=db.strategy(mint,&audit.verdict,audit.audit_score,snapshot.buy_sol,snapshot.sell_sol,snapshot.unique_buyers,snapshot.unique_sellers,json!({"evidence":audit.evidence,"reasons":audit.reasons})).await;let _=db.scenarios(mint,&scenarios).await;}}}}}}_=>{}}}else{warn!("unparseable PumpPortal message");}}Message::Ping(p)=>{write.send(Message::Pong(p)).await?}Message::Close(_)=>break,_=>{}}}warn!("PumpPortal closed; reconnecting")},Err(e)=>error!(%e,"PumpPortal connection failed; retrying")}sleep(Duration::from_secs(2)).await;}
 }
