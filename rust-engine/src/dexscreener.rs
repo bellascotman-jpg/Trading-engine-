@@ -1,30 +1,12 @@
-use crate::market::{MarketMetrics, PoolSnapshot};
-use reqwest::Client;
-use serde::Deserialize;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-pub enum DexError { #[error("http: {0}")] Http(#[from] reqwest::Error), #[error("no usable pair returned")] NoPair }
-#[derive(Debug, Deserialize)] struct Response { pairs: Option<Vec<Pair>> }
-#[derive(Debug, Deserialize)] struct Pair { #[serde(rename = "pairAddress")] pair_address: Option<String>, #[serde(rename = "dexId")] dex_id: Option<String>, #[serde(rename = "priceUsd")] price_usd: Option<String>, #[serde(rename = "fdv")] fdv: Option<f64>, liquidity: Option<Liquidity>, volume: Option<Volume>, txns: Option<Txns> }
-#[derive(Debug, Deserialize)] struct Liquidity { usd: Option<f64> }
-#[derive(Debug, Deserialize)] struct Volume { m5: Option<f64>, h1: Option<f64> }
-#[derive(Debug, Deserialize)] struct Txns { m5: Option<Window> }
-#[derive(Debug, Deserialize)] struct Window { buys: Option<u64>, sells: Option<u64> }
-#[derive(Debug, Clone, serde::Serialize)] pub struct EnrichedMarket { pub metrics: MarketMetrics, pub pool: PoolSnapshot, pub price_usd: Option<f64>, pub fdv_usd: Option<f64>, pub volume_5m_usd: Option<f64>, pub volume_1h_usd: Option<f64>, pub buy_count_5m: u64, pub sell_count_5m: u64, pub evidence: Vec<String> }
-#[derive(Clone)] pub struct DexScreener { client: Client, base: String }
-impl DexScreener {
-    pub fn new() -> Self { Self { client: Client::new(), base: "https://api.dexscreener.com/latest/dex".into() } }
-    pub async fn token(&self, mint: &str) -> Result<EnrichedMarket, DexError> {
-        let r: Response = self.client.get(format!("{}/tokens/{}", self.base, mint)).send().await?.error_for_status()?.json().await?;
-        let pair = r.pairs.and_then(|mut p| { p.sort_by(|a,b| b.liquidity.as_ref().and_then(|x| x.usd).partial_cmp(&a.liquidity.as_ref().and_then(|x| x.usd)).unwrap_or(std::cmp::Ordering::Equal)); p.into_iter().next() }).ok_or(DexError::NoPair)?;
-        let price_usd = pair.price_usd.as_deref().and_then(|v| v.parse::<f64>().ok());
-        let liq = pair.liquidity.as_ref().and_then(|v| v.usd).unwrap_or(0.0);
-        let vol5 = pair.volume.as_ref().and_then(|v| v.m5); let vol1 = pair.volume.as_ref().and_then(|v| v.h1);
-        let tx5 = pair.txns.as_ref().and_then(|v| v.m5.as_ref());
-        let buys = tx5.and_then(|v| v.buys).unwrap_or(0); let sells = tx5.and_then(|v| v.sells).unwrap_or(0);
-        let metrics = MarketMetrics { price_sol: None, liquidity_sol: None, volume_60s_sol: None, market_cap_sol: None, token_age_seconds: None };
-        let pool = PoolSnapshot { mint: mint.into(), dex: pair.dex_id.unwrap_or_else(|| "unknown".into()), pool_address: pair.pair_address, base_reserve: None, quote_reserve_sol: None, price_sol: None, liquidity_sol: None, observed_at_ms: crate::events::now_unix_ms(), evidence: vec![format!("Directly observed DexScreener liquidity: ${:.2}", liq)] };
-        Ok(EnrichedMarket { metrics, pool, price_usd, fdv_usd: pair.fdv, volume_5m_usd: vol5, volume_1h_usd: vol1, buy_count_5m: buys, sell_count_5m: sells, evidence: vec!["Directly observed public DexScreener pair data".into()] })
-    }
-}
+use crate::market::{MarketMetrics,PoolSnapshot}; use reqwest::Client; use serde::Deserialize; use thiserror::Error;
+#[derive(Debug,Error)] pub enum DexError{#[error("http: {0}")]Http(#[from]reqwest::Error),#[error("no usable pair returned")]NoPair}
+#[derive(Debug,Deserialize)]struct Response{pairs:Option<Vec<Pair>>}
+#[derive(Debug,Deserialize)]struct Pair{#[serde(rename="pairAddress")]pair_address:Option<String>,#[serde(rename="dexId")]dex_id:Option<String>,#[serde(rename="priceUsd")]price_usd:Option<String>,fdv:Option<f64>,liquidity:Option<Liquidity>,volume:Option<Volume>,txns:Option<Txns>}
+#[derive(Debug,Deserialize)]struct Liquidity{usd:Option<f64>}
+#[derive(Debug,Deserialize)]struct Volume{m5:Option<f64>,h1:Option<f64>}
+#[derive(Debug,Deserialize)]struct Txns{m5:Option<Window>}
+#[derive(Debug,Deserialize)]struct Window{buys:Option<u64>,sells:Option<u64>}
+#[derive(Debug,Clone,serde::Serialize)]pub struct EnrichedMarket{pub metrics:MarketMetrics,pub pool:PoolSnapshot,pub price_usd:Option<f64>,pub fdv_usd:Option<f64>,pub liquidity_usd:Option<f64>,pub volume_5m_usd:Option<f64>,pub volume_1h_usd:Option<f64>,pub buy_count_5m:u64,pub sell_count_5m:u64,pub evidence:Vec<String>}
+#[derive(Clone)]pub struct DexScreener{client:Client,base:String}
+impl DexScreener{pub fn new()->Self{Self{client:Client::new(),base:"https://api.dexscreener.com/latest/dex".into()}}
+pub async fn token(&self,mint:&str)->Result<EnrichedMarket,DexError>{let r:Response=self.client.get(format!("{}/tokens/{}",self.base,mint)).send().await?.error_for_status()?.json().await?;let pair=r.pairs.and_then(|mut p|{p.sort_by(|a,b|b.liquidity.as_ref().and_then(|x|x.usd).partial_cmp(&a.liquidity.as_ref().and_then(|x|x.usd)).unwrap_or(std::cmp::Ordering::Equal));p.into_iter().next()}).ok_or(DexError::NoPair)?;let price_usd=pair.price_usd.as_deref().and_then(|v|v.parse::<f64>().ok());let liq=pair.liquidity.as_ref().and_then(|v|v.usd);let vol5=pair.volume.as_ref().and_then(|v|v.m5);let vol1=pair.volume.as_ref().and_then(|v|v.h1);let tx5=pair.txns.as_ref().and_then(|v|v.m5.as_ref());let buys=tx5.and_then(|v|v.buys).unwrap_or(0);let sells=tx5.and_then(|v|v.sells).unwrap_or(0);let metrics=MarketMetrics{price_sol:None,liquidity_sol:None,volume_60s_sol:None,market_cap_sol:None,token_age_seconds:None};let pool=PoolSnapshot{mint:mint.into(),dex:pair.dex_id.unwrap_or_else(||"unknown".into()),pool_address:pair.pair_address,base_reserve:None,quote_reserve_sol:None,price_sol:None,liquidity_sol:None,observed_at_ms:crate::events::now_unix_ms(),evidence:vec!["Directly observed DexScreener pair data".into()]};Ok(EnrichedMarket{metrics,pool,price_usd,fdv_usd:pair.fdv,liquidity_usd:liq,volume_5m_usd:vol5,volume_1h_usd:vol1,buy_count_5m:buys,sell_count_5m:sells,evidence:vec!["Directly observed public DexScreener pair data".into()]})}}
