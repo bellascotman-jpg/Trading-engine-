@@ -8,6 +8,7 @@ use config::{AppConfig,OperatingMode}; use dexscreener::DexScreener; use rpc::So
  match rpc.get_latest_blockhash().await{Ok(h)=>info!(blockhash=%h.blockhash,last_valid_block_height=h.last_valid_block_height,"blockhash check passed"),Err(e)=>error!(%e,"blockhash check failed")}
  let url=config.pumpportal_url.clone(); let observer_rpc=rpc.clone(); let observer_store=store.clone(); let observer_dex=dex.clone(); let mode=config.mode; let risk=config.risk.clone();
  tokio::spawn(async move{if let Err(e)=observe_pipeline(&url,observer_rpc,observer_store,observer_dex,mode,risk).await{error!(%e,"market observer stopped");}});
+ raydium::listen_logs(config.websocket_url.clone(),store.clone()).await;
  let mut tick=interval(Duration::from_secs(15)); loop{tokio::select!{_ = tick.tick()=>match rpc.get_slot().await{Ok(slot)=>{info!(slot,mode=?config.mode,"engine heartbeat");if let Some(db)=&store{let _=db.health("rust-engine","healthy",None).await;}},Err(e)=>error!(%e,"RPC heartbeat failed")},_ = tokio::signal::ctrl_c()=>{info!("shutdown");break;}}}
 }
 async fn observe_pipeline(url:&str,rpc:SolanaRpc,store:Option<persistence::SupabaseStore>,dex:DexScreener,mode:OperatingMode,risk:config::RiskConfig)->Result<(),pumpportal::PumpPortalError>{
