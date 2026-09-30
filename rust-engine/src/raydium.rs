@@ -1,19 +1,7 @@
-use crate::events::{now_unix_ms, EventKind, EventSource, MarketEvent};
-use crate::market::PoolSnapshot;
-use serde_json::Value;
-
-pub const RAYDIUM_AMM_V4: &str = "675kPX9MHTjS2zt1qfr1NYHuz9bGqN7g5vQ8h6b6oF";
-pub const RAYDIUM_CPMM: &str = "CPMMoo8L3F4NbTn7Z6vH8s6R2mN1pQx9wYz4AbCdEf";
-
-pub fn detect_pool_from_log(v: &Value) -> Option<MarketEvent> {
-    let logs = v.get("logs")?.as_array()?;
-    let hit = logs.iter().filter_map(Value::as_str).any(|x| x.contains("initialize") || x.contains("Initialize") || x.contains("init_pool"));
-    if !hit { return None; }
-    let sig = v.get("signature").and_then(Value::as_str).map(str::to_owned);
-    Some(MarketEvent { event_id: sig.clone().unwrap_or_else(|| format!("raydium-{}", now_unix_ms())), observed_at_unix_ms: now_unix_ms(), slot: v.get("slot").and_then(Value::as_u64), signature: sig, mint: None, symbol: None, source: EventSource::Raydium, kind: EventKind::PoolCreated, sol_amount: None, token_amount: None, is_buy: None, trader: None })
-}
-
-pub fn normalize_pool(mint: String, pool: String, quote_sol: f64, base: f64) -> PoolSnapshot {
-    let price = (base > 0.0).then_some(quote_sol / base);
-    PoolSnapshot { mint, dex: "Raydium".into(), pool_address: Some(pool), base_reserve: Some(base), quote_reserve_sol: Some(quote_sol), price_sol: price, liquidity_sol: price.map(|p| quote_sol + base * p), observed_at_ms: now_unix_ms(), evidence: vec!["Observed/decoded pool reserves".into()] }
-}
+use crate::events::{now_unix_ms,EventKind,EventSource,MarketEvent}; use crate::market::PoolSnapshot; use serde_json::Value;
+/// Canonical Raydium mainnet program IDs sourced from Raydium's public repositories.
+pub const RAYDIUM_AMM_V4:&str="675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8";
+pub const RAYDIUM_CPMM:&str="CPMMoo8L3F4NbTegBCKVNunggL7H1ZpdTHKxQB5qKP1C";
+pub const RAYDIUM_CLMM:&str="CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK";
+pub fn detect_pool_from_log(v:&Value)->Option<MarketEvent>{let logs=v.get("logs")?.as_array()?;let hit=logs.iter().filter_map(Value::as_str).any(|x|x.contains("initialize")||x.contains("Initialize")||x.contains("init_pool"));if !hit{return None;}let sig=v.get("signature").and_then(Value::as_str).map(str::to_owned);Some(MarketEvent{event_id:sig.clone().unwrap_or_else(||format!("raydium-{}",now_unix_ms())),observed_at_unix_ms:now_unix_ms(),slot:v.get("slot").and_then(Value::as_u64),signature:sig,mint:None,symbol:None,source:EventSource::Raydium,kind:EventKind::PoolCreated,sol_amount:None,token_amount:None,is_buy:None,trader:None})}
+pub fn normalize_pool(mint:String,pool:String,quote_sol:f64,base:f64)->PoolSnapshot{let price=(base>0.0).then_some(quote_sol/base);PoolSnapshot{mint,dex:"Raydium".into(),pool_address:Some(pool),base_reserve:Some(base),quote_reserve_sol:Some(quote_sol),price_sol:price,liquidity_sol:price.map(|p|quote_sol+base*p),observed_at_ms:now_unix_ms(),evidence:vec!["Observed/decoded Raydium pool reserves".into()]}}
