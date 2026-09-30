@@ -6,7 +6,8 @@ pub struct OpportunityScore { pub score: f64, pub decision: Decision, pub reason
 pub struct ReturnScenario { pub multiple: f64, pub probability: f64, pub horizon: &'static str, pub evidence: Vec<String> }
 
 pub fn score(s: &SecuritySnapshot, f: &FlowSnapshot, m: &MarketMetrics) -> OpportunityScore {
-    let mut reasons = Vec::new(); let mut score = 0.0;
+    let mut reasons: Vec<String> = Vec::new();
+    let mut score: f64 = 0.0;
     if s.mint_authority_revoked == Some(true) { score += 20.0; } else { reasons.push("mint authority not confirmed".into()); }
     if s.freeze_authority_revoked == Some(true) { score += 20.0; } else { reasons.push("freeze authority not confirmed".into()); }
     if s.top_10_non_bonding_pct.is_some_and(|v| v <= 20.0) { score += 20.0; } else { reasons.push("holder concentration unavailable or above threshold".into()); }
